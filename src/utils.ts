@@ -1,4 +1,4 @@
-import { TParamsObject, TProps, TValidator, TValidatorType, TFormatValidators } from './form'
+import { TParamsObject, TProps, TValidator, TValidatorType, TFormatValidators } from './types'
 
 export const isRegExp = (v: RegExp) => {
   return Object.prototype.toString.call(v) === '[object RegExp]'

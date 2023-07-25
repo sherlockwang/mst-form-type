@@ -1,6 +1,6 @@
 import { types, Instance } from 'mobx-state-tree'
 import { formatProps, formatValidators } from './utils'
-import { TParamsObject, TProps, TFormatValidators } from './form.d'
+import { TParamsObject, TProps, TFormatValidators } from './types'
 
 const baseForm = types
   .model('BaseForm')
