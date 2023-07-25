@@ -27,7 +27,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sherlockwang/mst-request.git"
+    "url": "git+https://github.com/sherlockwang/mst-form-type.git"
   },
   "keywords": [
     "Mobx State Tree",
@@ -36,9 +36,9 @@
   "author": "Jinghan Wang",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/sherlockwang/mst-request/issues"
+    "url": "https://github.com/sherlockwang/mst-form-type/issues"
   },
-  "homepage": "https://github.com/sherlockwang/mst-request#readme",
+  "homepage": "https://github.com/sherlockwang/mst-form-type#readme",
   "files": [
     "dist/**/*"
   ],
