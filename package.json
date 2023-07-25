@@ -1,6 +1,6 @@
 {
   "name": "mst-form-type",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "main": "./dist/mst-form-type.cjs",
   "module": "./dist/mst-form-type.js",
