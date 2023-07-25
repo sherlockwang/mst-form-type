@@ -1,117 +1,133 @@
-import { types, Instance, flow } from 'mobx-state-tree'
+import { types, Instance } from 'mobx-state-tree'
+import { formatProps, formatValidators } from './utils'
+import { TParamsObject, TProps, TFormatValidators } from './form.d'
 
-type RequestFunc = (...args: any[]) => Promise<any[] | any>
-
-type ErrorHandlerFunc = (...args: any) => void
-
-type RequestParams = {
-  [key: string]: any
-  controller?: AbortController
-}
-
-const Request = types
-  .model('Request')
+const baseForm = types
+  .model('BaseForm')
   .props({
-    token: '',
-    status: types.optional(
-      types.enumeration(['init', 'pending', 'success', 'error', 'canceled']),
+    internalStatus: types.optional(
+      types.enumeration(['init', 'pending', 'success', 'error']),
       'init'
-    ),
-    data: types.frozen([]),
-    error: types.frozen({}),
+    ), // pending, error, success
+    submission: types.frozen({}),
+    error: types.frozen([]),
   })
   .views(self => ({
     get loading() {
-      return self.status === 'pending'
+      return self.internalStatus === 'pending'
     },
   }))
   .actions(self => {
-    let request: RequestFunc
-    let errHandler: ErrorHandlerFunc = (err: any) => console.error(err)
-    let hasSpecificCancel = false
-    let controller: AbortController
-    let prevParams: RequestParams = {} as RequestParams
-    let oneTime = false
+    let defaultValues: TProps
+    let validators: TFormatValidators
 
     return {
-      // not necessary, if used, must be called before set
-      option({ id, once = false }: { id?: string; once?: boolean }) {
-        self.token = id ?? ''
-        oneTime = once
-      },
-      set(reqFunc: RequestFunc, rejFunc?: ErrorHandlerFunc) {
-        if (oneTime && request) {
-          console.warn('This Request model has already been set.')
-          return
-        }
-        // @ts-ignore
-        self.reset()
-        request = reqFunc
-        errHandler = rejFunc ?? errHandler
-      },
-      // by default, Request model doesn't provide a default cancel controller
-      setCancel(cancel: AbortController) {
-        hasSpecificCancel = true
-        controller = cancel ?? new AbortController()
-      },
-      fetch: flow(function* (params?: RequestParams) {
-        if (typeof request !== 'function') {
-          throw new Error('Please set request function first')
-        }
+      init(params: TParamsObject) {
+        self.internalStatus = 'init'
 
-        if (self.status === 'pending') return
+        defaultValues = formatProps(params)
+        validators = formatValidators(params)
 
-        self.status = 'pending'
-
-        if (params) {
-          prevParams = { ...params }
-        }
-
-        if (hasSpecificCancel) {
-          prevParams.controller = controller
-        }
-
-        try {
-          self.data = yield request(prevParams)
-          self.status = 'success'
-        } catch (error) {
-          self.error = error as any
-          self.status = 'error'
-          self.data = []
-
-          errHandler(error)
-        }
-      }),
-      cancel() {
-        if (controller) {
-          controller.abort()
-          self.status = 'canceled'
-        } else {
-          console.warn('You need to set a controller first to cancel')
-        }
-      },
-      refetch: flow(function* () {
-        if (controller) {
+        for (const key in defaultValues) {
           // @ts-ignore
-          self.cancel()
+          self[key] = defaultValues[key]
+        }
+      },
+      setValue({ key, value }: { key: string; value: string | number | unknown }) {
+        if (key !== 'internalStatus') {
+          // @ts-ignore
+          self[key] = value
+        } else {
+          console.warn('internalStatus is preserved')
+        }
+      },
+      valid() {
+        const error = []
+
+        for (const key in validators) {
+          const field = validators[key]
+
+          if (field.type === 'func') {
+            // @ts-ignore
+            if (!validators[key].validator(self[key])) {
+              error.push({ key, error: `${key} doesn't pass validator function.` })
+            }
+          } else if (field.type === 'required') {
+            // @ts-ignore
+            if (!self[key]) {
+              error.push({ key, error: `${key} is missing.` })
+            }
+          } else if (field.type === 'regex') {
+            // @ts-ignore
+            if (!validators[key].validator.test(self[key])) {
+              error.push({ key, error: `${key} doesn't match validation regex.` })
+            }
+          }
         }
 
-        self.data = []
+        self.error = error
+
+        if (error.length) {
+          self.internalStatus = 'error'
+        } else {
+          self.internalStatus = 'pending'
+        }
+      },
+      submit() {
         // @ts-ignore
-        yield self.fetch()
-      }),
+        self.valid()
+
+        if (self.internalStatus === 'error') {
+          console.error('form has error')
+
+          return self.error
+        }
+
+        const output: TProps = {}
+
+        for (const key in defaultValues) {
+          // @ts-ignore
+          output[key] = self[key]
+        }
+
+        self.internalStatus = 'success'
+        self.submission = output
+
+        return self.submission
+      },
       reset() {
-        self.status = 'init'
-        self.data = []
-        self.error = null
+        self.internalStatus = 'init'
+        self.submission = {}
+        self.error = []
+
+        for (const key in defaultValues) {
+          // @ts-ignore
+          self[key] = defaultValues[key]
+        }
       },
     }
   })
 
-export default types.optional(Request, {
-  status: 'init',
-  data: [],
-  error: null,
-})
+const createForm = (params: TParamsObject, name?: string) => {
+  const props = formatProps(params)
 
-export type IRequest = Instance<typeof Request>
+  const Form = baseForm
+    .named(name)
+    //@ts-ignore
+    .props({
+      ...props,
+    })
+    .actions(self => ({
+      afterCreate() {
+        self.init(params)
+      },
+    }))
+
+  return types.optional(Form, {})
+}
+
+export default createForm
+
+type IBaseForm = Instance<typeof baseForm>
+
+export type IForm = IBaseForm & TProps

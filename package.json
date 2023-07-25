@@ -1,16 +1,17 @@
 {
   "name": "mst-form-type",
-  "version": "1.0.11",
+  "version": "1.0.0",
   "type": "module",
   "main": "./dist/mst-form-type.cjs",
   "module": "./dist/mst-form-type.js",
+  "types": "./dist/types/index.d.ts",
   "exports": {
     ".": {
       "require": "./dist/mst-form-type.cjs",
-      "import": "./dist/mst-form-type.js"
+      "import": "./dist/mst-form-type.js",
+      "types": "./dist/types/index.d.ts"
     }
   },
-  "types": "./dist/types/index.d.ts",
   "scripts": {
     "dev": "vite --host",
     "build": "vite build",

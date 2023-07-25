@@ -1,84 +1,89 @@
-import { describe, expect, it, vitest } from 'vitest'
-import form from '../src/index'
+import { describe, expect, it } from 'vitest'
+import createForm from '../src/index'
 
-describe('mst-request', () => {
-  it('should init correctly', () => {
-    const testRequest = form.create()
+const formSchema = {
+  name: {
+    default: '',
+    validator: 'required',
+  },
+  des: {
+    default: '',
+  },
+  type: {
+    default: 'cat',
+    validator: type => type === 'cat' || type === 'dog',
+  },
+  weight: {
+    default: 0,
+    validator: /\d/i,
+  },
+}
 
-    expect(testRequest.status).toEqual('init')
+describe('mst-form-type', () => {
+  it('should initialize correctly', () => {
+    const testForm = createForm(formSchema).create({})
+
+    expect(testForm.internalStatus).toEqual('init')
+    expect(testForm.submission).toEqual({})
+    expect(testForm.error).toEqual([])
   })
 
-  it('should set a request function', () => {
-    const testRequest = form.create()
-    const mockRequestFunc = vitest.fn()
+  it('should set and get values correctly', () => {
+    const testForm = createForm(formSchema).create({})
+    const testData = {
+      name: 'John Doe',
+      weight: 30,
+    }
 
-    testRequest.set(mockRequestFunc)
+    for (const key in testData) {
+      testForm.setValue({ key, value: testData[key] })
+    }
 
-    expect(testRequest.fetch).toBeDefined()
+    expect(testForm.name).toEqual('John Doe')
+    expect(testForm.weight).toEqual(30)
   })
 
-  it('should fetch data successfully', async () => {
-    const testRequest = form.create()
-    const mockData = [{ id: 1, name: 'Test' }]
-    const mockRequestFunc = vitest.fn().mockResolvedValue(mockData)
+  it('should validate fields correctly', () => {
+    const testForm = createForm(formSchema).create({})
 
-    testRequest.set(mockRequestFunc)
-    await testRequest.fetch()
+    testForm.valid()
+    expect(testForm.internalStatus).toEqual('error')
+    expect(testForm.error).toHaveLength(1)
 
-    expect(testRequest.status).toEqual('success')
-    expect(testRequest.data).toEqual(mockData)
+    testForm.setValue({ key: 'name', value: 'John Doe' })
+    testForm.setValue({ key: 'weight', value: 20 })
+    testForm.valid()
+    expect(testForm.internalStatus).toEqual('pending')
+    expect(testForm.error).toHaveLength(0)
+
+    testForm.setValue({ key: 'type', value: 'fish' })
+    testForm.valid()
+    expect(testForm.internalStatus).toEqual('error')
+    expect(testForm.error).toHaveLength(1)
   })
 
-  it('should handle request errors', async () => {
-    const testRequest = form.create()
-    const mockError = new Error('Request failed')
-    const mockRequestFunc = vitest.fn().mockRejectedValue(mockError)
-    const mockErrorHandler = vitest.fn()
+  it('should submit form data', () => {
+    const testForm = createForm(formSchema).create({})
+    const testData = { name: 'John Doe', weight: 30, des: '', type: 'cat' }
 
-    testRequest.set(mockRequestFunc, mockErrorHandler)
-    await testRequest.fetch()
+    testForm.setValue({ key: 'name', value: 'John Doe' })
+    testForm.setValue({ key: 'weight', value: 30 })
 
-    expect(testRequest.status).toEqual('error')
-    expect(testRequest.error).toEqual(mockError)
-    expect(testRequest.data).toEqual([])
-    expect(mockErrorHandler).toHaveBeenCalledWith(mockError)
+    const submission = testForm.submit()
+    expect(testForm.internalStatus).toEqual('success')
+    expect(testForm.submission).toEqual(testData)
+    expect(submission).toEqual(testData)
   })
 
-  it('should cancel the request', async () => {
-    const testRequest = form.create()
-    const mockRequestFunc = vitest
-      .fn()
-      .mockImplementation(() => Promise.resolve())
+  it('should reset form state', () => {
+    const testForm = createForm(formSchema).create({})
 
-    testRequest.set(mockRequestFunc)
-    testRequest.setCancel(new AbortController())
-    testRequest.fetch()
-    testRequest.cancel()
+    testForm.reset()
 
-    expect(testRequest.status).toEqual('canceled')
-  })
-
-  it('should refetch data', async () => {
-    const testRequest = form.create()
-    const mockData = [{ id: 1, name: 'Test' }]
-    const mockRequestFunc = vitest.fn().mockResolvedValue(mockData)
-
-    testRequest.set(mockRequestFunc)
-    await testRequest.refetch()
-
-    expect(testRequest.status).toEqual('success')
-    expect(testRequest.data).toEqual(mockData)
-  })
-
-  it('should reset the model', () => {
-    const testRequest = form.create({
-      status: 'success',
-      data: [{ id: 1, name: 'Test' }],
-    })
-
-    testRequest.reset()
-
-    expect(testRequest.status).toEqual('init')
-    expect(testRequest.data).toEqual([])
+    expect(testForm.internalStatus).toEqual('init')
+    expect(testForm.submission).toEqual({})
+    expect(testForm.error).toEqual([])
+    expect(testForm.name).toEqual('')
+    expect(testForm.weight).toEqual(0)
   })
 })

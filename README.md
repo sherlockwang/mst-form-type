@@ -1,6 +1,8 @@
 # MST Form Type
 
-**Under construction**
+> **Still under construction**
+
+This is a tiny custom mobx-state-tree model type to handle common forms. It create a new custom `types.model` based on form schema to contain all fields, and call validators passed along with every key for validation. If no error happens, it will return all fields values in key-value object via `submit()` action. It will hold last valid submission, as well as last error. Both can be accessed through outside. The package is easy to understand, and hope it can save some effort.
 
 ## Install
 
@@ -8,25 +10,21 @@
 
 ## Usage
 
-## APIs
+```javescript
+import createForm from 'mst-form-type'
 
+const schema = {
+
+}
+
+const Main = types.model('Main', {
+  form: createForm(schema)
+  ...
+})
+```
+
+## APIs
 
 ### props
 
-`prop`
-
-
 ### actions
-
-Some actions are necessary, some are not. For normal use case, only a few actions are needed.
-
-`set(request, reject?)`
-
-Set the request and reject function for a mst-request. The request function will be used for later fetch action.
-
-Every time called `set` action will reset the mst-request. See `reset()` action for more detail.
-
-If `option()` is called to set `once = true`, the request function can only be set for one time. See `option()` action for more detail.
-
-**Must be called before fetch to set a request function.**
-
