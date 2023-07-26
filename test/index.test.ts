@@ -25,7 +25,7 @@ describe('mst-form-type', () => {
 
     expect(testForm.internalStatus).toEqual('init')
     expect(testForm.submission).toEqual({})
-    expect(testForm.error).toEqual([])
+    expect(testForm.error).toEqual({})
   })
 
   it('should set and get values correctly', () => {
@@ -48,18 +48,18 @@ describe('mst-form-type', () => {
 
     testForm.valid()
     expect(testForm.internalStatus).toEqual('error')
-    expect(testForm.error).toHaveLength(1)
+    expect(testForm.error).toHaveProperty('name')
 
     testForm.setValue({ key: 'name', value: 'John Doe' })
     testForm.setValue({ key: 'weight', value: 20 })
     testForm.valid()
     expect(testForm.internalStatus).toEqual('pending')
-    expect(testForm.error).toHaveLength(0)
+    expect(testForm.error).toEqual({})
 
     testForm.setValue({ key: 'type', value: 'fish' })
     testForm.valid()
     expect(testForm.internalStatus).toEqual('error')
-    expect(testForm.error).toHaveLength(1)
+    expect(testForm.error).toHaveProperty('type')
   })
 
   it('should submit form data', () => {
@@ -82,7 +82,7 @@ describe('mst-form-type', () => {
 
     expect(testForm.internalStatus).toEqual('init')
     expect(testForm.submission).toEqual({})
-    expect(testForm.error).toEqual([])
+    expect(testForm.error).toEqual({})
     expect(testForm.name).toEqual('')
     expect(testForm.weight).toEqual(0)
   })

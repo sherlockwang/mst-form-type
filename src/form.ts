@@ -10,7 +10,7 @@ const baseForm = types
       'init'
     ), // pending, error, success
     submission: types.frozen({}),
-    error: types.frozen([]),
+    error: types.frozen({}),
   })
   .views(self => ({
     get loading() {
@@ -33,6 +33,14 @@ const baseForm = types
           self[key] = defaultValues[key]
         }
       },
+      initVal(initialValue: TProps) {
+        for (const key in initialValue) {
+          if (key in self) {
+            // @ts-ignore
+            self[key] = initialValue[key]
+          }
+        }
+      },
       setValue({ key, value }: { key: string; value: string | number | unknown }) {
         if (key !== 'internalStatus') {
           // @ts-ignore
@@ -42,7 +50,7 @@ const baseForm = types
         }
       },
       valid() {
-        const error = []
+        const error = {}
 
         for (const key in validators) {
           const field = validators[key]
@@ -50,24 +58,24 @@ const baseForm = types
           if (field.type === 'func') {
             // @ts-ignore
             if (!validators[key].validator(self[key])) {
-              error.push({ key, error: `${key} doesn't pass validator function.` })
+              error[key] = `${key} doesn't pass validator function.`
             }
           } else if (field.type === 'required') {
             // @ts-ignore
             if (!self[key]) {
-              error.push({ key, error: `${key} is missing.` })
+              error[key] = `${key} is missing.`
             }
           } else if (field.type === 'regex') {
             // @ts-ignore
             if (!validators[key].validator.test(self[key])) {
-              error.push({ key, error: `${key} doesn't match validation regex.` })
+              error[key] = `${key} doesn't match validation regex.`
             }
           }
         }
 
         self.error = error
 
-        if (error.length) {
+        if (Object.keys(error).length) {
           self.internalStatus = 'error'
         } else {
           self.internalStatus = 'pending'
@@ -98,7 +106,7 @@ const baseForm = types
       reset() {
         self.internalStatus = 'init'
         self.submission = {}
-        self.error = []
+        self.error = {}
 
         for (const key in defaultValues) {
           // @ts-ignore
