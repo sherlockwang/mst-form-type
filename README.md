@@ -2,6 +2,111 @@
 
 This is a tiny custom Mobx State Tree type to handle common forms. It create a new custom `types.model` based on form schema. If no error happens, it will return all fields values in Key-Value object via `submit()` action. It will hold the last valid submission, as well as the last error. The package is easy to understand, and hope it can save some effort.
 
+## V2 update
+
+1. Schema change. Old schema is still supported, but will be format to new schema under the table. So I recommend to use new schema, which is also more clear. See example:
+
+```javescript
+// Old
+const schema = {
+  [key: string]: {
+    default: string | number
+    validator?: 'required' | ((...args: any[]) => boolean) | RegExp | undefined | null
+  }
+}
+
+// New
+interface FieldSchema {
+  id: string
+  type?: 'string' | 'number' | 'object' | 'array' | 'boolean'
+  default: any
+  validator?: any
+}
+
+interface DynamicFields {
+  id: string
+  limit: number
+  schema: FieldSchema | FieldSchema[]
+  default: any
+  onAdd?: (item: any) => any
+  onRemove?: (item: any) => any
+  onEdit?: (key: string) => any
+}
+
+interface FormSchema {
+  static: FieldSchema[]
+  dynamic?: DynamicFields[]
+}
+```
+
+2. Support dynamic field form with 1 level. Every dynamic field will be assigned a self increaing id. See example:
+
+```javescript
+const dynamicForm: FormSchema = {
+  static: [
+    {
+      id: 'name',
+      default: '',
+      validator: 'required',
+    },
+    {
+      id: 'des',
+      default: '',
+    },
+  ],
+  dynamic: [
+    {
+      id: 'price', // group id
+      limit: 100,
+      schema: [
+        {
+          id: 'itemName',
+          default: '',
+          validator: 'required',
+        },
+        {
+          id: 'itemPrice',
+          default: 10,
+        },
+      ],
+      default: [
+        {
+          itemName: 'itemName1',
+          itemPrice: 5,
+        },
+        {
+          itemName: 'itemName2',
+          itemPrice: 20,
+        },
+      ],
+      onAdd: i => {
+        console.log('add', i)
+      },
+      onRemove: i => {
+        console.log('remove', i)
+      },
+      onEdit: key => {
+        console.log('edit', key)
+      },
+    },
+  ],
+}
+
+// render dynamic fields
+model.dynamicForm['price'].fields.map(fields => ({ ... }))
+
+// field action
+model.dynamicForm.onAdd('price') // this will use field default value in schema
+model.dynamicForm.onRemove('price', fields.id)
+
+// form action
+model.dynamicForm.submit()
+model.dynamicForm.reset()
+model.dynamicForm.clear('price') // this will clear all dynamic fields, including default ones
+```
+
+3. Remove `initVal` action, now init form by schema, and use reset to set form to init values.
+
 ## Install
 
 `npm install -S mst-form-type`
@@ -12,10 +117,8 @@ This is a tiny custom Mobx State Tree type to handle common forms. It create a n
 import createForm from 'mst-form-type'
 
 const schema = {
-  [key: string]: {
-    default: string | number
-    validator?: 'required' | ((...args: any[]) => boolean) | RegExp | undefined | null
-  }
+  static: FieldSchema[]
+  dynamic?: DynamicFields[]
 }
 
 const Main = types.model('Main', {
@@ -24,7 +127,9 @@ const Main = types.model('Main', {
 })
 
 // change field value
-form.setValue({ key: 'key', value: 'value' })
+form.setValue({ key, value })
+// change dynamic field value
+form.setDynamicValue({ groupId, id, key, value })
 // submit form
 form.submit() => { key1: value1, key2: value2, ... }
 ```
@@ -33,12 +138,7 @@ form.submit() => { key1: value1, key2: value2, ... }
 
 ### schema
 
-```typescript
-[key: string]: {
-  default: string | number
-  validator?: 'required' | ((...args: any[]) => boolean) | RegExp | undefined | null
-}
-```
+**See V2 Update section for schema change**
 
 `key`
 
@@ -50,7 +150,7 @@ The default value of a field. It can be `string` or `number`. The Mobx State Tre
 
 `validator`
 
-This is optional. All validators will be called in `valid()` before `submit()`. 
+This is optional. All validators will be called in `valid()` before `submit()`.
 
 `'required'` means this field cannot be falsy values, like `0`, `''`, or `undefined`.
 
@@ -88,19 +188,21 @@ The default exported method will create a new custom `types.model` with all the 
 
 It will be called after new custom type created with schema. It will process the schema to get default values and validators. Usually, you don't need to call it manually.
 
-`initVal({ key1: value1, key2: value2, ... })`
+**`setValue(value)`**
 
-It helps init form fields values if you want different default values than schema. 
-
-**The only difference is this method will only set values for existed fields.**
+The key method to set field value on field instance. 
 
 **`setValue({ key, value })`**
 
-The key method to set field value. `internalStatus` is reserved.
+The key method to set field value on form instance. It is used to set static field value. `_internalStatus` is reserved.
+
+**`setDynamicValue({ groupId, id, key, value })`**
+
+The key method to set field value on form instance. Each dynamic field has a field group id and a field id. It is used to set dynamic field value. Or you can use the `setValue` action on instance to do the same job.
 
 `valid()`
 
-It will run all validators in schema with current field values. Usually you don't need to call it manually. It will be called in `submit()`, and produce `error` if any error happens. 
+It will run all validators in schema with current field values. Usually you don't need to call it manually. It will be called in `submit()`, and produce `error` if any error happens.
 
 **`submit()`**
 

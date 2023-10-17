@@ -1,91 +1,196 @@
-import { types, Instance } from 'mobx-state-tree'
-import { formatProps, formatValidators } from './utils'
-import { TParamsObject, TProps, TFormatValidators } from './types'
+import { types, Instance, getSnapshot } from 'mobx-state-tree'
+import {
+  TParams,
+  TProps,
+  TValidator,
+  IField,
+  TValue,
+  IGroup,
+  TError,
+  TStaticParams,
+  TDynamicField,
+} from './types.d'
+
+const isRegExp = (v: RegExp) => {
+  return Object.prototype.toString.call(v) === '[object RegExp]'
+}
+
+const valueType = types.union(
+  types.boolean,
+  types.string,
+  types.number,
+  types.frozen({}),
+  types.frozen([])
+)
+
+const fieldModel = types
+  .model('Field')
+  .props({
+    id: types.identifier,
+    default: valueType,
+    value: valueType,
+    msg: 'The input is invalid',
+  })
+  .views(self => ({
+    get invalid() {
+      // @ts-ignore
+      return !self.valid()
+    },
+  }))
+  .actions(self => {
+    let validator: (arg: TValue) => boolean = null
+
+    return {
+      setValidator(rawValidator: TValidator) {
+        if (rawValidator === 'required') {
+          validator = val => !!val
+        } else if (typeof rawValidator === 'function') {
+          validator = rawValidator
+        } else if (isRegExp(rawValidator)) {
+          validator = () => rawValidator.test(self.value as string)
+        }
+      },
+      init(field: IField) {
+        self.default = self.default || field.default
+        // @ts-ignore
+        self.setValue(self.default || field.default)
+        // @ts-ignore
+        self.setValidator(field.validator)
+
+        if (field.msg) {
+          // @ts-ignore
+          self.setErrorMsg(field.msg)
+        }
+      },
+      setErrorMsg(msg: string) {
+        self.msg = msg
+      },
+      valid(): boolean {
+        if (validator) {
+          return validator(self.value)
+        }
+        return true
+      },
+      setValue(val: TValue) {
+        self.value = val
+      },
+      reset() {
+        self.value = self.default
+      },
+      clear() {
+        self.value = null
+      },
+    }
+  })
+
+type TFieldModel = typeof fieldModel
+type IFieldModel = Instance<typeof fieldModel>
 
 const baseForm = types
   .model('BaseForm')
   .props({
-    internalStatus: types.optional(
+    _internalStatus: types.optional(
       types.enumeration(['init', 'pending', 'success', 'error']),
       'init'
-    ), // pending, error, success
+    ),
     submission: types.frozen({}),
-    error: types.frozen({}),
+    error: types.frozen([]),
   })
   .views(self => ({
     get loading() {
-      return self.internalStatus === 'pending'
+      return self._internalStatus === 'pending'
     },
   }))
   .actions(self => {
-    let defaultValues: TProps
-    let validators: TFormatValidators
+    let staticFields: IField[] = []
+    let dynamicGroups: IGroup[] = []
 
     return {
-      init(params: TParamsObject) {
-        self.internalStatus = 'init'
+      init(params: TParams) {
+        self._internalStatus = 'init'
 
-        defaultValues = formatProps(params)
-        validators = formatValidators(params)
+        staticFields = params.static
 
-        for (const key in defaultValues) {
+        staticFields.forEach(field => {
           // @ts-ignore
-          self[key] = defaultValues[key]
-        }
-      },
-      initVal(initialValue: TProps) {
-        for (const key in initialValue) {
-          if (key in self) {
+          self[field.id].init(field)
+        })
+
+        if (params.dynamic) {
+          dynamicGroups = params.dynamic
+
+          dynamicGroups.forEach(group => {
             // @ts-ignore
-            self[key] = initialValue[key]
-          }
+            const groupModel = self[group.id]
+
+            group.default?.forEach((item: IField) => {
+              groupModel.addFields(item, true)
+            })
+          })
         }
       },
       setValue({ key, value }: { key: string; value: string | number | unknown }) {
-        if (key !== 'internalStatus') {
+        if (key !== '_internalStatus') {
           // @ts-ignore
-          self[key] = value
+          self[key].setValue(value)
         } else {
-          console.warn('internalStatus is preserved')
+          console.warn('_internalStatus is preserved')
+        }
+      },
+      setDynamicValue({
+        groupId,
+        id,
+        key,
+        value,
+      }: {
+        groupId: string
+        id: string
+        key: string
+        value: string | number | unknown
+      }) {
+        if (key !== '_internalStatus') {
+          // @ts-ignore
+          const groupModel = self[groupId]
+          groupModel.editField(id, key, value)
+        } else {
+          console.warn('_internalStatus is preserved')
         }
       },
       valid() {
-        const error = {}
+        const formError: TError[] = []
 
-        for (const key in validators) {
-          const field = validators[key]
-
-          if (field.type === 'func') {
+        staticFields.forEach(field => {
+          // @ts-ignore
+          if (!self[field.id].valid()) {
             // @ts-ignore
-            if (!validators[key].validator(self[key])) {
-              error[key] = `${key} doesn't pass validator function.`
-            }
-          } else if (field.type === 'required') {
-            // @ts-ignore
-            if (!self[key]) {
-              error[key] = `${key} is missing.`
-            }
-          } else if (field.type === 'regex') {
-            // @ts-ignore
-            if (!validators[key].validator.test(self[key])) {
-              error[key] = `${key} doesn't match validation regex.`
-            }
+            formError.push({ key: field.id, msg: self[field.id]?.msg })
           }
-        }
+        })
 
-        self.error = error
+        dynamicGroups.forEach(group => {
+          // @ts-ignore
+          const { id, error } = self[group.id].valid()
 
-        if (Object.keys(error).length) {
-          self.internalStatus = 'error'
+          if (error.length) {
+            formError.push({ key: id, error })
+          }
+        })
+
+        if (formError.length) {
+          self._internalStatus = 'error'
         } else {
-          self.internalStatus = 'pending'
+          self._internalStatus = 'pending'
         }
+
+        self.error = formError
+
+        return formError
       },
       submit() {
         // @ts-ignore
         self.valid()
 
-        if (self.internalStatus === 'error') {
+        if (self._internalStatus === 'error') {
           console.error('form has error')
 
           return self.error
@@ -93,45 +198,323 @@ const baseForm = types
 
         const output: TProps = {}
 
-        for (const key in defaultValues) {
+        staticFields.forEach(field => {
           // @ts-ignore
-          output[key] = self[key]
-        }
+          output[field.id] = self[field.id].value
+        })
 
-        self.internalStatus = 'success'
+        dynamicGroups.forEach(group => {
+          // @ts-ignore
+          output[group.id] = self[group.id].getValues()
+        })
+
+        self._internalStatus = 'success'
         self.submission = output
 
-        return self.submission
+        return output
       },
       reset() {
-        self.internalStatus = 'init'
+        self._internalStatus = 'init'
         self.submission = {}
-        self.error = {}
+        self.error = []
 
-        for (const key in defaultValues) {
+        staticFields.forEach(field => {
           // @ts-ignore
-          self[key] = defaultValues[key]
-        }
+          self[field.id].reset()
+        })
+
+        dynamicGroups.forEach(group => {
+          // @ts-ignore
+          self[group.id].reset()
+        })
       },
     }
   })
 
-const createForm = (params: TParamsObject, name?: string) => {
-  const props = formatProps(params)
+const baseGroup = types
+  .model('BaseDynamicGroup')
+  .props({
+    id: types.identifier,
+    fields: types.frozen([]),
+    counter: 0,
+    size: 0,
+    limit: -1,
+  })
+  .actions(self => {
+    return {
+      getValues() {
+        const values = getSnapshot(self.fields).map((i: IField) => {
+          const output: TProps = {}
+
+          Object.keys(i).forEach(key => {
+            if (key === 'id') {
+              output[key] = i[key]
+            } else {
+              // @ts-ignore
+              output[key] = i[key].value
+            }
+          })
+
+          return output
+        })
+
+        return values
+      },
+      valid() {
+        const error: TError[] = []
+
+        self.fields.forEach(item => {
+          Object.keys(item).forEach(key => {
+            if (key !== 'id') {
+              const field: IFieldModel = item[key]
+
+              if (!field.valid()) {
+                error.push({ key: field.id, msg: field.msg })
+              }
+            }
+          })
+        })
+
+        return {
+          id: self.id,
+          error,
+        }
+      },
+      reset() {
+        self.fields.forEach(item => {
+          Object.keys(item).forEach(key => {
+            if (key !== 'id') {
+              item[key].reset()
+            }
+          })
+        })
+      },
+      addFields(id: string, groupFieldProps: Record<string, TFieldModel>, newItem: TDynamicField) {
+        const pendingAddItem = { id }
+
+        Object.entries(groupFieldProps).forEach(([key]: [string, TFieldModel]) => {
+          // @ts-ignore
+          pendingAddItem[key] = {
+            id: `${id}--${key}`,
+            value: newItem[key] || '',
+            default: newItem[key] || '',
+          }
+        })
+
+        self.fields.push(pendingAddItem)
+
+        self.size++
+      },
+      removeFields(id: string) {
+        if (self.size > 0) {
+          const pendingRemoveIdx = self.fields.findIndex(i => i.id === id)
+          const removeItem: TDynamicField = {}
+
+          Object.keys(getSnapshot(self.fields[pendingRemoveIdx])).forEach(key => {
+            if (key === 'id') {
+              removeItem[key] = self.fields[pendingRemoveIdx][key]
+            } else {
+              removeItem[key] = self.fields[pendingRemoveIdx][key].value
+            }
+          })
+
+          self.fields.splice(pendingRemoveIdx, 1)
+          self.size--
+
+          return removeItem
+        }
+        return null
+      },
+      editField(id: string, fieldKey: string, value: TValue) {
+        const pendingEditItem: TFieldModel = self.fields.find(i => i.id === id)
+        // @ts-ignore
+        pendingEditItem[fieldKey].setValue(value)
+
+        return pendingEditItem
+      },
+      clearField() {
+        self.fields.length = 0
+        self.size = 0
+      },
+    }
+  })
+
+type TBaseGroupModel = typeof baseGroup
+
+const formatParams = (params: TParams | TStaticParams) => {
+  let output: TParams = { static: [] }
+  const keyArr = Object.keys(params)
+
+  if (keyArr.includes('dynamic') && !keyArr.includes('static')) {
+    keyArr.forEach(key => {
+      if (key === 'dynamic') {
+        output.dynamic = params[key] as IGroup[]
+      } else {
+        // @ts-ignore
+        output.static.push(params[key])
+      }
+    })
+  } else if (!keyArr.includes('dynamic') && !keyArr.includes('static')) {
+    keyArr.forEach(key => {
+      // @ts-ignore
+      output.static.push({ id: key, ...params[key] })
+    })
+  } else {
+    // @ts-ignore
+    output = { ...params }
+  }
+
+  return output
+}
+
+const prepareFormModel = (params: TParams) => {
+  const initData: Record<string, IField | {}> = {}
+  const staticFieldProps: Record<string, TFieldModel> = {}
+  const dynamicFieldProps: Record<string, TBaseGroupModel> = {}
+
+  params.static.forEach((field: IField) => {
+    initData[field.id] = {
+      id: field.id,
+      value: field.default,
+      default: field.default,
+      msg: field.msg,
+    }
+
+    staticFieldProps[field.id] = fieldModel
+  })
+
+  if (params.dynamic?.length) {
+    params.dynamic.forEach((fieldGroup: IGroup) => {
+      initData[fieldGroup.id] = {}
+
+      // every group's field
+      const groupFieldProps: Record<string, TFieldModel> = {}
+      const groupFieldInit: Record<string, IField> = {}
+
+      fieldGroup.schema.forEach(field => {
+        groupFieldProps[field.id] = fieldModel
+        groupFieldInit[field.id] = field
+      })
+
+      dynamicFieldProps[fieldGroup.id] = baseGroup
+        .named(fieldGroup.id.toUpperCase())
+        .props({
+          id: fieldGroup.id,
+          fields: types.array(
+            types.model({
+              id: types.identifier,
+              ...groupFieldProps,
+            })
+          ),
+          limit: fieldGroup.limit,
+        })
+        .actions(self => {
+          const baseAddField = self.addFields
+          const baseRemoveField = self.removeFields
+          const baseEditField = self.editField
+
+          return {
+            addFields(i, isInit = false) {
+              if (self.limit !== -1 && self.size < self.limit) {
+                const id = i.id || `${self.id}-${self.counter++}`
+
+                baseAddField(id, groupFieldProps, i)
+
+                // dynamic field init
+                self.fields.forEach(item => {
+                  Object.keys(groupFieldProps).forEach(key => {
+                    item[key].init(groupFieldInit[key])
+                  })
+                })
+
+                if (!isInit) {
+                  fieldGroup.onAdd({ id, ...i })
+                }
+
+                return id
+              }
+              console.warn('reach dynamic field limit')
+              return null
+            },
+            removeFields(id) {
+              const removeItem = baseRemoveField(id)
+              fieldGroup.onRemove(removeItem)
+            },
+            editField(id: string, fieldKey: string, value) {
+              const editItem = baseEditField(id, fieldKey, value)
+              fieldGroup.onEdit(editItem)
+            },
+          }
+        })
+    })
+  }
+
+  return {
+    initData,
+    staticFieldProps,
+    dynamicFieldProps,
+  }
+}
+
+const createForm = (rawParams: TParams | TStaticParams, name?: string) => {
+  const params = formatParams(rawParams)
+  const { initData, staticFieldProps, dynamicFieldProps } = prepareFormModel(params)
 
   const Form = baseForm
     .named(name)
-    //@ts-ignore
     .props({
-      ...props,
+      ...staticFieldProps,
+      ...dynamicFieldProps,
     })
-    .actions(self => ({
-      afterCreate() {
-        self.init(params)
-      },
-    }))
+    .actions(self => {
+      const actions: Record<string, (...args) => any> = {
+        afterCreate() {
+          self.init(params)
+        },
+      }
 
-  return types.optional(Form, {})
+      if (params.dynamic) {
+        actions.onAdd = (groupId: string, item = {}) => {
+          const groupModel = self[groupId]
+
+          if (groupModel) {
+            // @ts-ignore
+            groupModel.addFields(item)
+          }
+        }
+
+        actions.onRemove = (groupId: string, itemId: string) => {
+          const groupModel = self[groupId]
+
+          if (groupModel) {
+            // @ts-ignore
+            groupModel.removeFields(itemId)
+          }
+        }
+
+        actions.onEdit = (groupId: string, id: string, key: string, value: TValue) => {
+          const groupModel = self[groupId]
+
+          if (groupModel) {
+            // @ts-ignore
+            groupModel.editField(id, key, value)
+          }
+        }
+
+        actions.clear = (groupId: string) => {
+          const groupModel = self[groupId]
+
+          if (groupModel) {
+            // @ts-ignore
+            groupModel.clearField()
+          }
+        }
+      }
+
+      return actions
+    })
+
+  return types.optional(Form, initData)
 }
 
 export default createForm

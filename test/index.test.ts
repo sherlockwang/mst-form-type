@@ -1,89 +1,70 @@
 import { describe, expect, it } from 'vitest'
 import createForm from '../src/index'
 
-const formSchema = {
-  name: {
-    default: '',
-    validator: 'required',
-  },
-  des: {
-    default: '',
-  },
-  type: {
-    default: 'cat',
-    validator: type => type === 'cat' || type === 'dog',
-  },
-  weight: {
-    default: 0,
-    validator: /\d/i,
-  },
-}
+const formSchema = { static: [{ id: 'name', default: '', validator: 'required' }] }
 
-describe('mst-form-type', () => {
+describe('baseForm', () => {
   it('should initialize correctly', () => {
-    const testForm = createForm(formSchema).create({})
+    const testForm = createForm(formSchema)
 
-    expect(testForm.internalStatus).toEqual('init')
+    expect(testForm._internalStatus).toEqual('init')
     expect(testForm.submission).toEqual({})
-    expect(testForm.error).toEqual({})
+    expect(testForm.error).toEqual([])
   })
 
   it('should set and get values correctly', () => {
-    const testForm = createForm(formSchema).create({})
-    const testData = {
-      name: 'John Doe',
-      weight: 30,
-    }
+    const testForm = createForm(formSchema)
 
-    for (const key in testData) {
-      testForm.setValue({ key, value: testData[key] })
-    }
-
-    expect(testForm.name).toEqual('John Doe')
-    expect(testForm.weight).toEqual(30)
+    testForm.setValue({ key: 'name', value: 'John Doe' })
+    expect(testForm.name.value).toEqual('John Doe')
   })
 
   it('should validate fields correctly', () => {
-    const testForm = createForm(formSchema).create({})
+    const testForm = createForm(formSchema)
 
-    testForm.valid()
-    expect(testForm.internalStatus).toEqual('error')
-    expect(testForm.error).toHaveProperty('name')
+    testForm.setValue({ key: 'age', value: 20 })
+    expect(testForm.age.valid()).toBeTruthy()
 
-    testForm.setValue({ key: 'name', value: 'John Doe' })
-    testForm.setValue({ key: 'weight', value: 20 })
-    testForm.valid()
-    expect(testForm.internalStatus).toEqual('pending')
-    expect(testForm.error).toEqual({})
-
-    testForm.setValue({ key: 'type', value: 'fish' })
-    testForm.valid()
-    expect(testForm.internalStatus).toEqual('error')
-    expect(testForm.error).toHaveProperty('type')
+    testForm.setValue({ key: 'age', value: 15 })
+    expect(testForm.age.valid()).toBeFalsy()
   })
 
   it('should submit form data', () => {
-    const testForm = createForm(formSchema).create({})
-    const testData = { name: 'John Doe', weight: 30, des: '', type: 'cat' }
+    const testForm = createForm(formSchema)
 
-    testForm.setValue({ key: 'name', value: 'John Doe' })
-    testForm.setValue({ key: 'weight', value: 30 })
-
-    const submission = testForm.submit()
-    expect(testForm.internalStatus).toEqual('success')
-    expect(testForm.submission).toEqual(testData)
-    expect(submission).toEqual(testData)
+    testForm.submit()
+    expect(testForm._internalStatus).toEqual('success')
   })
 
   it('should reset form state', () => {
-    const testForm = createForm(formSchema).create({})
+    const testForm = createForm(formSchema)
 
+    testForm.setValue({ key: 'name', value: 'John Doe' })
     testForm.reset()
 
-    expect(testForm.internalStatus).toEqual('init')
+    expect(testForm._internalStatus).toEqual('init')
     expect(testForm.submission).toEqual({})
-    expect(testForm.error).toEqual({})
-    expect(testForm.name).toEqual('')
-    expect(testForm.weight).toEqual(0)
+    expect(testForm.error).toEqual([])
+    expect(testForm.name.value).toEqual('')
+  })
+})
+
+describe('createForm', () => {
+  it('should create a form with given parameters', () => {
+    const params = {
+      static: [{ id: 'name', default: '', validator: 'required' }],
+      dynamic: [
+        {
+          id: 'group1',
+          schema: [{ id: 'field1', default: 0, validator: 'func' }],
+          limit: 2,
+        },
+      ],
+    }
+
+    const testForm = createForm(params)
+
+    expect(testForm.name.value).toEqual('')
+    expect(testForm.group1.size).toEqual(0)
   })
 })
