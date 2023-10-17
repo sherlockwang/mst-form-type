@@ -19,18 +19,19 @@ const schema = {
 interface FieldSchema {
   id: string
   type?: 'string' | 'number' | 'object' | 'array' | 'boolean'
-  default: any
-  validator?: any
+  default: TValue
+  validator?: TValidator
+  msg?: string
 }
 
 interface DynamicFields {
   id: string
   limit: number
   schema: FieldSchema | FieldSchema[]
-  default: any
-  onAdd?: (item: any) => any
-  onRemove?: (item: any) => any
-  onEdit?: (key: string) => any
+  default: Array<Record<string, TValue>>
+  onAdd?: (arg) => any
+  onRemove?: (id: string) => any
+  onEdit?: (key: string) => void
 }
 
 interface FormSchema {
@@ -190,7 +191,7 @@ It will be called after new custom type created with schema. It will process the
 
 **`setValue(value)`**
 
-The key method to set field value on field instance. 
+The key method to set field value on field instance.
 
 **`setValue({ key, value })`**
 
