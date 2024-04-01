@@ -34,7 +34,7 @@ const fieldModel = types
   .views(self => ({
     get invalid() {
       // @ts-ignore
-      return !self.valid()
+      return !self.valid(self.value)
     },
   }))
   .actions(self => {
@@ -47,7 +47,7 @@ const fieldModel = types
         } else if (typeof rawValidator === 'function') {
           validator = rawValidator
         } else if (isRegExp(rawValidator)) {
-          validator = () => rawValidator.test(self.value as string)
+          validator = validator = val => rawValidator.test(val as string)
         }
       },
       init(field: IField) {
@@ -65,9 +65,9 @@ const fieldModel = types
       setErrorMsg(msg: string) {
         self.msg = msg
       },
-      valid(): boolean {
+      valid(val = self.value): boolean {
         if (validator) {
-          return validator(self.value)
+          return validator(val as TValue)
         }
         return true
       },
@@ -84,7 +84,7 @@ const fieldModel = types
   })
 
 type TFieldModel = typeof fieldModel
-type IFieldModel = Instance<typeof fieldModel>
+type IstFieldModel = Instance<typeof fieldModel>
 
 const baseForm = types
   .model('BaseForm')
@@ -123,7 +123,7 @@ const baseForm = types
             // @ts-ignore
             const groupModel = self[group.id]
 
-            group.default?.forEach((item: IField) => {
+            group.default?.forEach(item => {
               groupModel.addFields(item, true)
             })
           })
@@ -132,7 +132,7 @@ const baseForm = types
       setValue({ key, value }: { key: string; value: string | number | unknown }) {
         if (key !== '_internalStatus') {
           // @ts-ignore
-          self[key].setValue(value)
+          self[key].setValue?.(value)
         } else {
           console.warn('_internalStatus is preserved')
         }
@@ -266,7 +266,7 @@ const baseGroup = types
         self.fields.forEach(item => {
           Object.keys(item).forEach(key => {
             if (key !== 'id') {
-              const field: IFieldModel = item[key]
+              const field: IstFieldModel = item[key]
 
               if (!field.valid()) {
                 error.push({ key: field.id, msg: field.msg })
@@ -304,6 +304,8 @@ const baseGroup = types
         self.fields.push(pendingAddItem)
 
         self.size++
+
+        return self.fields[self.size - 1]
       },
       removeFields(id: string) {
         if (self.size > 0) {
@@ -418,17 +420,14 @@ const prepareFormModel = (params: TParams) => {
               if (self.limit !== -1 && self.size < self.limit) {
                 const id = i.id || `${self.id}-${self.counter++}`
 
-                baseAddField(id, groupFieldProps, i)
+                const newField = baseAddField(id, groupFieldProps, i)
 
-                // dynamic field init
-                self.fields.forEach(item => {
-                  Object.keys(groupFieldProps).forEach(key => {
-                    item[key].init(groupFieldInit[key])
-                  })
+                Object.keys(groupFieldProps).forEach(key => {
+                  newField[key].init(groupFieldInit[key])
                 })
 
                 if (!isInit) {
-                  fieldGroup.onAdd({ id, ...i })
+                  fieldGroup?.onAdd({ id, ...i })
                 }
 
                 return id
@@ -438,11 +437,11 @@ const prepareFormModel = (params: TParams) => {
             },
             removeFields(id) {
               const removeItem = baseRemoveField(id)
-              fieldGroup.onRemove(removeItem)
+              fieldGroup?.onRemove(removeItem)
             },
             editField(id: string, fieldKey: string, value) {
               const editItem = baseEditField(id, fieldKey, value)
-              fieldGroup.onEdit(editItem)
+              fieldGroup?.onEdit(editItem)
             },
           }
         })
@@ -519,6 +518,6 @@ const createForm = (rawParams: TParams | TStaticParams, name?: string) => {
 
 export default createForm
 
-type IBaseForm = Instance<typeof baseForm>
+type IstBaseForm = Instance<typeof baseForm>
 
-export type IForm = IBaseForm & TProps
+export type IForm = IstBaseForm & TProps

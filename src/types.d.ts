@@ -19,9 +19,9 @@ interface DynamicFields {
   limit: number
   schema: FieldSchema | FieldSchema[]
   default: Array<Record<string, TValue>>
-  onAdd?: (arg) => any
-  onRemove?: (id: string) => any
-  onEdit?: (key: string) => void
+  onAdd?: (field) => any
+  onRemove?: (field) => any
+  onEdit?: (field) => void
 }
 
 interface FormSchema {
@@ -41,7 +41,7 @@ export interface IGroup {
   id: string
   limit: number
   schema: Array<IField>
-  default: Array<Record<string, TValue>>
+  default?: Array<Record<string, TValue>>
   onAdd?: TCallback
   onRemove?: TCallback
   onEdit?: TCallback
