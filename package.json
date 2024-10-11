@@ -17,7 +17,7 @@
     "build": "vite build",
     "test": "vitest",
     "test:coverage": "vitest --coverage",
-    "lint": "eslint **/*.{ts,tsx,js,jsx}",
+    "lint": "eslint **/*.ts",
     "format": "prettier . --write",
     "prepare": "husky",
     "uninstall-husky": "npm uninstall husky --no-save && git config --unset core.hooksPath && npx rimraf .husky",
