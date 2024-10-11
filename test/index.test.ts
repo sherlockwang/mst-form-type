@@ -1,70 +1,82 @@
+import { types } from 'mobx-state-tree'
 import { describe, expect, it } from 'vitest'
 import createForm from '../src/index'
 
-const formSchema = { static: [{ id: 'name', default: '', validator: 'required' }] }
+describe('Static Form', () => {
+  const formSchema = {
+    static: [
+      { id: 'name', default: '', validator: 'required' },
+      { id: 'age', default: '', validator: val => val >= 18 },
+    ],
+  }
 
-describe('baseForm', () => {
+  const formInstance = types
+    .model()
+    .props({
+      form: createForm(formSchema),
+    })
+    .create({})
+
   it('should initialize correctly', () => {
-    const testForm = createForm(formSchema)
-
-    expect(testForm._internalStatus).toEqual('init')
-    expect(testForm.submission).toEqual({})
-    expect(testForm.error).toEqual([])
+    expect(formInstance.form._internalStatus).toEqual('init')
+    expect(formInstance.form.submission).toEqual({})
+    expect(formInstance.form.error).toEqual([])
   })
 
   it('should set and get values correctly', () => {
-    const testForm = createForm(formSchema)
-
-    testForm.setValue({ key: 'name', value: 'John Doe' })
-    expect(testForm.name.value).toEqual('John Doe')
+    formInstance.form.name.setValue('John Doe')
+    expect(formInstance.form.name.value).toEqual('John Doe')
   })
 
   it('should validate fields correctly', () => {
-    const testForm = createForm(formSchema)
+    formInstance.form.age.setValue(20)
+    expect(formInstance.form.age.valid()).toBeTruthy()
 
-    testForm.setValue({ key: 'age', value: 20 })
-    expect(testForm.age.valid()).toBeTruthy()
-
-    testForm.setValue({ key: 'age', value: 15 })
-    expect(testForm.age.valid()).toBeFalsy()
+    formInstance.form.setValue({ key: 'age', value: 15 })
+    expect(formInstance.form.age.valid()).toBeFalsy()
   })
 
   it('should submit form data', () => {
-    const testForm = createForm(formSchema)
+    formInstance.form.setValue({ key: 'age', value: 20 })
 
-    testForm.submit()
-    expect(testForm._internalStatus).toEqual('success')
+    formInstance.form.submit()
+    expect(formInstance.form._internalStatus).toEqual('success')
   })
 
   it('should reset form state', () => {
-    const testForm = createForm(formSchema)
+    formInstance.form.setValue({ key: 'name', value: 'John Doe' })
+    formInstance.form.reset()
 
-    testForm.setValue({ key: 'name', value: 'John Doe' })
-    testForm.reset()
-
-    expect(testForm._internalStatus).toEqual('init')
-    expect(testForm.submission).toEqual({})
-    expect(testForm.error).toEqual([])
-    expect(testForm.name.value).toEqual('')
+    expect(formInstance.form._internalStatus).toEqual('init')
+    expect(formInstance.form.submission).toEqual({})
+    expect(formInstance.form.error).toEqual([])
+    expect(formInstance.form.name.value).toEqual('')
   })
 })
 
-describe('createForm', () => {
+describe('Dynamic Form', () => {
+  const formSchema = {
+    static: [{ id: 'name', default: 'abc', validator: 'required' }],
+    dynamic: [
+      {
+        id: 'group',
+        schema: [{ id: 'field1', default: 0, validator: 'func' }],
+        limit: 2,
+      },
+    ],
+  }
+
   it('should create a form with given parameters', () => {
-    const params = {
-      static: [{ id: 'name', default: '', validator: 'required' }],
-      dynamic: [
-        {
-          id: 'group1',
-          schema: [{ id: 'field1', default: 0, validator: 'func' }],
-          limit: 2,
-        },
-      ],
-    }
+    const formInstance = types
+      .model()
+      .props({
+        form: createForm(formSchema),
+      })
+      .create({})
 
-    const testForm = createForm(params)
+    console.log(formInstance.form.group1)
 
-    expect(testForm.name.value).toEqual('')
-    expect(testForm.group1.size).toEqual(0)
+    expect(formInstance.form.name.value).toEqual('abc')
+    expect(formInstance.form.group.size).toEqual(0)
   })
 })

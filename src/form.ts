@@ -1,14 +1,14 @@
-import { types, Instance, getSnapshot } from 'mobx-state-tree'
+import { Instance, getSnapshot, types } from 'mobx-state-tree'
 import {
+  IField,
+  IGroup,
+  TDynamicField,
+  TError,
   TParams,
   TProps,
-  TValidator,
-  IField,
-  TValue,
-  IGroup,
-  TError,
   TStaticParams,
-  TDynamicField,
+  TValidator,
+  TValue,
 } from './types.d'
 
 const isRegExp = (v: RegExp) => {
@@ -416,7 +416,7 @@ const prepareFormModel = (params: TParams) => {
           const baseEditField = self.editField
 
           return {
-            addFields(i, isInit = false) {
+            addFields(i = {}, isInit = false) {
               if (self.limit !== -1 && self.size < self.limit) {
                 const id = i.id || `${self.id}-${self.counter++}`
 
